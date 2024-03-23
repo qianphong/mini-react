@@ -8,17 +8,11 @@ mini-react 游戏副本
 
 1. 显示 app 文本
 2. 自己实现 React 的 API
-
-```tsx
-import ReactDOM from 'react-dom/client'
-import App from './App.tsx'
-
-ReactDOM.createRoot(document.getElementById('root')).render(<App />)
-```
+3. 使用 jsx
 
 ### 实现 mini-react
 
-#### 通过命令式 UI ，实现屏幕显示 `app` 文本
+#### 命令式 UI 的实现方式
 
 ```js
 const root = document.getElementById('root')
@@ -42,6 +36,8 @@ react -> vdom 虚拟 DOM -> js Object
 
 ### 如何使用 jsx
 
-1. 使用 Vite 构建项目
+使用 Vite 构建项目
 
-2. 思考，如果 DOM 树层级过深，会有什么问题
+### 思考，如果 DOM 树层级过深，会有什么问题？
+
+- 渲染问题，频繁添加修改 DOM 多次触发浏览器重排和重绘，可以考虑使用`document.createDocumentFragment`进行优化，最后一次性将文档片段添加到文档中，可以减少对 DOM 的直接操作次数
