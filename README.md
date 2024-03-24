@@ -41,3 +41,49 @@ react -> vdom 虚拟 DOM -> js Object
 ### 思考，如果 DOM 树层级过深，会有什么问题？
 
 - 渲染问题，频繁添加修改 DOM 多次触发浏览器重排和重绘，可以考虑使用`document.createDocumentFragment`进行优化，最后一次性将文档片段添加到文档中，可以减少对 DOM 的直接操作次数
+
+## 任务调度器&fiber 架构
+
+一点想法：知道任务目标后，先尝试自己思考怎么实现，写写试试，之后再看视频，结合自己的思考实现过程，印象会比较深刻
+
+任务目标
+
+1. 实现任务调度器
+2. 如何控制渲染，如何拆分
+
+### 任务调度器
+
+1. JS 单线程，会阻塞渲染
+2. 使用分支思想拆分渲染，
+3. `requestIdleCallback`
+
+```js
+let taskId
+
+function work(IdleDeadline) {
+  console.log('taskId:', taskId++)
+  console.log('time:', IdleDeadline.timeRemaining())
+  window.requestIdleCallback(work)
+}
+
+window.requestIdleCallback(work)
+```
+
+### fiber 架构
+
+1. UI 树转换成链表结构，规则优先级
+   - 优先看有没有 Child，
+   - 没有 child 返回兄弟节点
+   - 返回叔叔节点（没有子节点和兄弟节点）
+
+关于指针返回下一个 fiber 的问题
+没有考虑到如果父节点没有兄弟节点，但是父节点的父节点存在兄弟节点，如图，如果渲染到 D 节点，之后 E、F 节点并不会继续渲染，
+思考：应该一直往上找，直到找到存在兄弟节点或者根节点为止
+![alt text](img.png)
+
+```js
+// 通过建立的指针关系，返回下一个要执行的fiber
+if (fiber.child) return fiber.child
+if (fiber.sibling) return fiber.sibling
+return fiber.parent?.sibling
+```

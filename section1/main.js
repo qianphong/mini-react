@@ -1,7 +1,7 @@
-import ReactDOM from './core/react-dom.js'
-import App from './app.js'
+// import ReactDOM from './core/react-dom.js'
+// import App from './app.js'
 
-ReactDOM.createRoot(document.getElementById('root')).render(App)
+// ReactDOM.createRoot(document.getElementById('root')).render(App)
 // 命令式
 // const root = document.getElementById('root')
 // const app = document.createElement('div')
@@ -17,3 +17,20 @@ ReactDOM.createRoot(document.getElementById('root')).render(App)
 // function createTextNode() {}
 // function createElement() {}
 // function render() {}
+
+let taskId = 0
+
+function workLoop(IdleDeadline) {
+  taskId++
+
+  let shouldYield = false
+  while (!shouldYield) {
+    console.log('taskId:', taskId++)
+
+    shouldYield = IdleDeadline.timeRemaining() < 1
+  }
+
+  window.requestIdleCallback(workLoop)
+}
+
+window.requestIdleCallback(workLoop)
