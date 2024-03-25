@@ -87,3 +87,15 @@ if (fiber.child) return fiber.child
 if (fiber.sibling) return fiber.sibling
 return fiber.parent?.sibling
 ```
+
+## 统一提交&实现 function component
+
+### 实现统一提交
+
+1. `requestIdleCallback` 中途可能没有时间回调
+2. 创建完 DOM 后就添加，将添加 DOM 后置，调整为统一提交 DOm
+3. 什么时候执行完？根节点是谁
+
+### 实现 function component
+
+1. function component 的父级没有 dom，要一直往上找
