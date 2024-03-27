@@ -41,8 +41,8 @@ function updateProps(
   }
 }
 
-// 处理子节点 转换链表
-function initChildren(fiber: Fiber, children?: VDom[]) {
+// 处理子节点 转换链表 reconcileChildren
+function reconcileChildren(fiber: Fiber, children?: VDom[]) {
   let oldFiber = fiber.alternate?.child
   let prevChild: Fiber
   children?.forEach((child, index) => {
@@ -74,7 +74,7 @@ function initChildren(fiber: Fiber, children?: VDom[]) {
 // 更新函数组件
 function updateFunctionComponent(fiber: Fiber) {
   const type: FC = fiber.type as any
-  initChildren(fiber, [type(fiber.props)])
+  reconcileChildren(fiber, [type(fiber.props)])
 }
 // 更新原始组件
 function updateHostComponent(fiber: Fiber) {
@@ -88,7 +88,7 @@ function updateHostComponent(fiber: Fiber) {
     updateProps(fiber.dom, fiber.props, fiber.alternate?.props)
   }
   // 3. 转换链表
-  initChildren(fiber, fiber.props?.children)
+  reconcileChildren(fiber, fiber.props?.children)
 }
 // 执行任务
 function performFiberOfUnit(fiber: Fiber): FiberOfUnit {
@@ -131,7 +131,7 @@ function workLoop(nextFiberOfUnit: FiberOfUnit, deadline?: IdleDeadline) {
   if (nextFiberOfUnit) {
     window.requestIdleCallback(deadline => workLoop(nextFiberOfUnit, deadline))
   } else {
-    commitDom(root)
+    commitDom(wipRoot)
   }
 }
 
@@ -154,29 +154,26 @@ function commitDom(fiber: FiberOfUnit) {
   commitDom(fiber.sibling)
 }
 
-let root: FiberOfUnit
+let wipRoot: FiberOfUnit
 // 渲染函数
 function render(el: VDom, dom: HTMLElement) {
-  workLoop(
-    (root = {
-      dom,
-      props: {
-        children: [el],
-      },
-    }),
-  )
+  wipRoot = {
+    dom,
+    props: {
+      children: [el],
+    },
+  }
+  workLoop(wipRoot)
 }
 // 更新渲染
 function update() {
-  if (!root) return
-  workLoop(
-    (root = {
-      dom: root.dom, // 当前节点 dom
-      props: root.props,
-      alternate: root,
-    }),
-  )
-  console.log(root)
+  if (!wipRoot) return
+  wipRoot = {
+    dom: wipRoot.dom, // 当前节点 dom
+    props: wipRoot.props,
+    alternate: wipRoot,
+  }
+  workLoop(wipRoot)
 }
 function handleChild(children: (string | VDom | (string | VDom)[])[]) {
   const copyChildren: VDom[] = []
