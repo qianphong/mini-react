@@ -99,3 +99,25 @@ return fiber.parent?.sibling
 ### 实现 function component
 
 1. function component 的父级没有 dom，要一直往上找
+
+## vdom 的更新
+
+### 实现事件绑定
+
+1. 获取事件类型，绑定事件句柄
+
+### 实现更新 props
+
+1. 如何获取新的 dom 树
+2. 如何找到老的节点，设置属性指向老的节点
+   - 如果是更新则添加标记`update`，并将老节点的 dom 赋值给新的 fiber，避免重新创建
+3. 如何 diff props
+   - old 有，new 没有，删除
+   - new 有，old 没有，添加
+   - new 有，old 有，修改
+
+更新事件属性时应该解绑之前的事件句柄
+思考：为什么变量要写在组件外面才会产生变化
+
+函数组件本质上还是一个函数，如果写在函数内部，在调用函数组件创建执行上下文时重新初始化变量对象，变量的值不会改变。所以需要写在函数外作为全局变量。
+但是在 React 中应该比避免这种情况，应该保持组件的纯粹，即输入相同，则输出相同，React 文档中关于 [保持组件纯粹](https://react.docschina.org/learn/keeping-components-pure)

@@ -15,9 +15,15 @@ export type VDomElement = HTMLElement | Text
 
 export type Fiber<T = VDom['type']> = {
   type?: T
-  dom: VDomElement | null
+  dom?: VDomElement
   props?: VDom['props']
-  child: Fiber | null
-  sibling: Fiber | null
-  parent: Fiber | null
+  /**子节点 */
+  child?: Fiber
+  /**兄弟节点 */
+  sibling?: Fiber
+  /**父节点 */
+  parent?: Fiber
+  /**旧的 fiber */
+  alternate?: Fiber
+  action?: 'placement' | 'update'
 }
