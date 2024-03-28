@@ -121,3 +121,38 @@ return fiber.parent?.sibling
 
 函数组件本质上还是一个函数，如果写在函数内部，在调用函数组件创建执行上下文时重新初始化变量对象，变量的值不会改变。所以需要写在函数外作为全局变量。
 但是在 React 中应该比避免这种情况，应该保持组件的纯粹，即输入相同，则输出相同，React 文档中关于 [保持组件纯粹](https://react.docschina.org/learn/keeping-components-pure)
+
+## 击杀 update children
+
+### diff-更新 children
+
+删除旧的，创建新的
+
+### diff-删除多余的老节点
+
+一个边界情况，当第一个子节点为表达式，且值为 `false` 时候，
+
+```jsx
+const show = false
+function App() {
+  return (
+    <div>
+      {show && <span>1</span>}
+      <span>2</span>
+    </div>
+  )
+}
+```
+
+在 `fiber.child` 赋值时存在错误
+
+```js
+// 使用 index === 0 判断存在问题，改为判断fiber是否存在child
+if (!fiber.child) {
+  fiber.child = newFiber
+} else {
+  prevFiber.sibling = newFiber
+}
+```
+
+### 优化更新，减少不必要的计算

@@ -42,34 +42,54 @@ function updateProps(
 }
 
 // 处理子节点 转换链表 reconcileChildren
-function reconcileChildren(fiber: Fiber, children?: VDom[]) {
+function reconcileChildren(fiber: Fiber, children?: (VDom | false)[]) {
   let oldFiber = fiber.alternate?.child
-  let prevChild: Fiber
+  let prevFiber: Fiber
   children?.forEach((child, index) => {
-    const newFiber: Fiber = {
-      type: child.type,
-      props: child.props,
-      parent: fiber,
-    }
-    const isUpdate = oldFiber && oldFiber.type === child.type
-    if (isUpdate) {
-      newFiber.action = 'update'
-      newFiber.dom = oldFiber?.dom
-      newFiber.alternate = oldFiber
+    let newFiber: Fiber | undefined
+    if (child !== false) {
+      newFiber = {
+        type: child.type,
+        props: child.props,
+        parent: fiber,
+      }
+      if (!oldFiber) {
+        // 不存在 oldFibre就是新创建
+        newFiber.action = 'placement'
+      } else if (oldFiber.type === child.type) {
+        // 类型相同更新
+        newFiber.action = 'update'
+        newFiber.dom = oldFiber?.dom
+        newFiber.alternate = oldFiber
+      } else {
+        // 类型不同则创建新的，删除旧的
+        newFiber.action = 'placement'
+        console.log(oldFiber)
+        deletions.push(oldFiber)
+      }
     } else {
-      newFiber.action = 'placement'
+      deletions.push(oldFiber)
     }
 
-    if (index === 0) {
+    if (!fiber.child) {
       fiber.child = newFiber
     } else {
-      prevChild.sibling = newFiber
+      prevFiber.sibling = newFiber
     }
-    prevChild = newFiber
+
+    if (newFiber) {
+      prevFiber = newFiber
+    }
+
     if (oldFiber) {
-      oldFiber = oldFiber?.sibling
+      oldFiber.alternate = undefined
+      oldFiber = oldFiber.sibling
     }
   })
+  while (oldFiber) {
+    deletions.push(oldFiber)
+    oldFiber = oldFiber.sibling
+  }
 }
 // 更新函数组件
 function updateFunctionComponent(fiber: Fiber) {
@@ -131,30 +151,60 @@ function workLoop(nextFiberOfUnit: FiberOfUnit, deadline?: IdleDeadline) {
   if (nextFiberOfUnit) {
     window.requestIdleCallback(deadline => workLoop(nextFiberOfUnit, deadline))
   } else {
-    commitDom(wipRoot)
+    commitRoot()
   }
 }
 
+let wipRoot: FiberOfUnit
+let deletions: FiberOfUnit[] = []
+
+function commitRoot() {
+  console.log(deletions)
+  deletions.forEach(fiber => commitDeletion(fiber))
+  commitDom(wipRoot)
+  deletions = []
+}
+// 统一删除提交
+function commitDeletion(fiber: FiberOfUnit) {
+  if (!fiber) return
+
+  if (fiber.dom) {
+    let fiberParent = fiber.parent
+    // 往上找，直到找到存在dom的父元素
+    while (fiberParent && !fiberParent.dom) {
+      fiberParent = fiberParent.parent
+    }
+    console.log(fiber.dom)
+    fiberParent?.dom?.removeChild(fiber.dom)
+  } else {
+    commitDeletion(fiber.child)
+  }
+}
 // 统一提交 DOM 更改
 function commitDom(fiber: FiberOfUnit) {
   if (!fiber) return
 
   if (fiber.dom) {
+    let fiberParent = fiber.parent
+    // 往上找，直到找到存在dom的父元素
+    while (fiberParent && !fiberParent.dom) {
+      fiberParent = fiberParent.parent
+    }
     if (fiber.action === 'placement') {
-      let fiberParent = fiber.parent
-      // 往上找，直到找到存在dom的父元素
-      while (fiberParent && !fiberParent.dom) {
-        fiberParent = fiberParent.parent
-      }
       fiberParent?.dom?.appendChild(fiber.dom)
     }
+    // else if (fiber.action === 'replace') {
+    //   fiberParent?.dom?.appendChild(fiber.dom)
+    //   if (fiber.alternate!.dom) {
+    //     fiberParent?.dom?.removeChild(fiber.alternate!.dom!)
+    //   }
+    // }
   }
 
   commitDom(fiber.child)
   commitDom(fiber.sibling)
 }
 
-let wipRoot: FiberOfUnit
 // 渲染函数
 function render(el: VDom, dom: HTMLElement) {
   wipRoot = {
