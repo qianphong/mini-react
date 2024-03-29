@@ -156,3 +156,17 @@ if (!fiber.child) {
 ```
 
 ### 优化更新，减少不必要的计算
+
+利用闭包获取当前函数组件
+
+## 搞定 useState
+
+### 实现 useState
+
+将 state 绑定在当前 fiber 上，并且记录 hook 序号，hook 必须在顶层，因为根据顺序寻找 hook
+
+### 批量执行 action
+
+存储 state queue，按照队列执行更新
+
+### 提前检测，减少不必要的更新

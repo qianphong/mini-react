@@ -26,4 +26,5 @@ export type Fiber<T = VDom['type']> = {
   /**旧的 fiber */
   alternate?: Fiber
   action?: 'placement' | 'update'
+  stateHooks?: { state: any }[]
 }

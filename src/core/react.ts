@@ -33,8 +33,8 @@ function updateProps(
         if (prop.startsWith('on')) {
           const eventType = prop.slice(2).toLowerCase()
           dom.removeEventListener(eventType, oldProps[prop])
-        } else {
-          ;(dom as HTMLElement).removeAttribute(prop)
+        } else if (!(dom instanceof Text)) {
+          dom.removeAttribute(prop)
         }
       }
     })
@@ -64,26 +64,26 @@ function reconcileChildren(fiber: Fiber, children?: (VDom | false)[]) {
       } else {
         // 类型不同则创建新的，删除旧的
         newFiber.action = 'placement'
-        console.log(oldFiber)
         deletions.push(oldFiber)
       }
     } else {
       deletions.push(oldFiber)
     }
-
+    // 子节点（第一个子节点）不存在则将newFiber赋值，排除{false}情况反复运行
     if (!fiber.child) {
       fiber.child = newFiber
     } else {
+      // 子节点已存在，将上一个子节点的兄弟节点指向当前创建的兄弟节点
       prevFiber.sibling = newFiber
     }
-
-    if (newFiber) {
-      prevFiber = newFiber
-    }
-
+    // 如果存在oldFiber，将下次循环需要的oldFiber的指针指向oldFiber的兄弟节点
     if (oldFiber) {
       oldFiber.alternate = undefined
       oldFiber = oldFiber.sibling
+    }
+    // 存在新的Fiber才赋值
+    if (newFiber) {
+      prevFiber = newFiber
     }
   })
   while (oldFiber) {
@@ -93,9 +93,14 @@ function reconcileChildren(fiber: Fiber, children?: (VDom | false)[]) {
 }
 // 更新函数组件
 function updateFunctionComponent(fiber: Fiber) {
+  stateHookIndex = 0
+  stateHooks = []
+  wipFiber = fiber
+  wipFiber.stateHooks = stateHooks
   const type: FC = fiber.type as any
   reconcileChildren(fiber, [type(fiber.props)])
 }
+
 // 更新原始组件
 function updateHostComponent(fiber: Fiber) {
   if (fiber.type) {
@@ -103,13 +108,13 @@ function updateHostComponent(fiber: Fiber) {
       // 1. 创建Node节点
       fiber.dom = createNode(fiber.type as ElementType)
     }
-
     // 2. 添加属性 props
     updateProps(fiber.dom, fiber.props, fiber.alternate?.props)
   }
   // 3. 转换链表
   reconcileChildren(fiber, fiber.props?.children)
 }
+
 // 执行任务
 function performFiberOfUnit(fiber: Fiber): FiberOfUnit {
   if (isFC(fiber.type)) {
@@ -143,6 +148,10 @@ function workLoop(nextFiberOfUnit: FiberOfUnit, deadline?: IdleDeadline) {
 
     while (!shouldYield && nextFiberOfUnit) {
       nextFiberOfUnit = performFiberOfUnit(nextFiberOfUnit)
+      // 实现局部更新
+      if (wipRoot?.sibling?.type === nextFiberOfUnit?.type) {
+        nextFiberOfUnit = undefined
+      }
       shouldYield = deadline.timeRemaining() < 1
     }
   }
@@ -157,13 +166,14 @@ function workLoop(nextFiberOfUnit: FiberOfUnit, deadline?: IdleDeadline) {
 
 let wipRoot: FiberOfUnit
 let deletions: FiberOfUnit[] = []
+let wipFiber: FiberOfUnit
 
 function commitRoot() {
-  console.log(deletions)
   deletions.forEach(fiber => commitDeletion(fiber))
   commitDom(wipRoot)
   deletions = []
 }
+
 // 统一删除提交
 function commitDeletion(fiber: FiberOfUnit) {
   if (!fiber) return
@@ -174,7 +184,6 @@ function commitDeletion(fiber: FiberOfUnit) {
     while (fiberParent && !fiberParent.dom) {
       fiberParent = fiberParent.parent
     }
-    console.log(fiber.dom)
     fiberParent?.dom?.removeChild(fiber.dom)
   } else {
     commitDeletion(fiber.child)
@@ -183,7 +192,10 @@ function commitDeletion(fiber: FiberOfUnit) {
 // 统一提交 DOM 更改
 function commitDom(fiber: FiberOfUnit) {
   if (!fiber) return
-
+  // 局部更新
+  if (fiber.type && wipRoot?.sibling?.type === fiber.type) {
+    return
+  }
   if (fiber.dom) {
     let fiberParent = fiber.parent
     // 往上找，直到找到存在dom的父元素
@@ -193,15 +205,10 @@ function commitDom(fiber: FiberOfUnit) {
     if (fiber.action === 'placement') {
       fiberParent?.dom?.appendChild(fiber.dom)
     }
-    // else if (fiber.action === 'replace') {
-    //   fiberParent?.dom?.appendChild(fiber.dom)
-    //   if (fiber.alternate!.dom) {
-    //     fiberParent?.dom?.removeChild(fiber.alternate!.dom!)
-    //   }
-    // }
   }
 
   commitDom(fiber.child)
+
   commitDom(fiber.sibling)
 }
 
@@ -215,16 +222,48 @@ function render(el: VDom, dom: HTMLElement) {
   }
   workLoop(wipRoot)
 }
+
 // 更新渲染
 function update() {
-  if (!wipRoot) return
-  wipRoot = {
-    dom: wipRoot.dom, // 当前节点 dom
-    props: wipRoot.props,
-    alternate: wipRoot,
+  const currentFiber = wipFiber
+  return () => {
+    if (currentFiber) {
+      wipRoot = {
+        type: currentFiber.type,
+        dom: currentFiber.dom,
+        props: currentFiber.props,
+        sibling: currentFiber.sibling,
+        alternate: currentFiber,
+      }
+      workLoop(wipRoot)
+    }
   }
-  workLoop(wipRoot)
 }
+let stateHooks: any[]
+let stateHookIndex: number
+// 实现useState
+function useState<T>(initialValue: T) {
+  const currentFiber = wipFiber as Fiber
+  const oldHook = currentFiber.alternate?.stateHooks?.[stateHookIndex]
+  const stateHook = {
+    state: oldHook ? oldHook.state : initialValue,
+  }
+  stateHookIndex++
+  stateHooks.push(stateHook)
+
+  const setValue = (action: (v: T) => T) => {
+    stateHook.state = action(stateHook.state)
+    wipRoot = {
+      ...currentFiber,
+      child: undefined, // 重置整个子树
+      alternate: currentFiber,
+    }
+    workLoop(wipRoot)
+  }
+
+  return [stateHook.state, setValue] as const
+}
+
 function handleChild(children: (string | VDom | (string | VDom)[])[]) {
   const copyChildren: VDom[] = []
   children.forEach(child => {
@@ -238,6 +277,7 @@ function handleChild(children: (string | VDom | (string | VDom)[])[]) {
   })
   return copyChildren
 }
+
 // 创建元素
 function createElement(
   type: ElementType | FC,
@@ -253,4 +293,4 @@ function createElement(
   }
 }
 
-export default { render, createElement, update }
+export default { render, createElement, useState }
